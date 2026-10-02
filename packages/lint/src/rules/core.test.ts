@@ -681,6 +681,9 @@ describe("core rules", () => {
       ["transition-property", "opacity"],
       ["-webkit-transition", "opacity 0.5s ease"],
       ["-webkit-transition-duration", "0.5s"],
+      ["transition", "opacity 0s linear 1s"],
+      ["transition-duration", "0s, .2s"],
+      ["transition-duration", "var(--speed)"],
     ])("errors for %s declarations in style blocks", async (property, value) => {
       const result = await lintHyperframeHtml(
         compositionWithBodyPrefix(`<style>.card { ${property}: ${value}; }</style>`),
@@ -710,6 +713,10 @@ describe("core rules", () => {
       ["transition-property", "none"],
       ["-webkit-transition", "none"],
       ["-webkit-transition-property", "NONE"],
+      ["transition-duration", "0s"],
+      ["transition-delay", "0ms, 0s"],
+      ["-webkit-transition-duration", "0s"],
+      ["transition", "opacity 0s ease 0s"],
     ])("allows %s: %s", async (property, value) => {
       const result = await lintHyperframeHtml(
         compositionWithBodyPrefix(`<style>.card { ${property}: ${value} !important; }</style>`),
