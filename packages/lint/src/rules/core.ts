@@ -287,7 +287,7 @@ function cssTransitionFinding(
 ): HyperframeLintFinding {
   return {
     code: "css_transition_used",
-    severity: "error",
+    severity: "warning",
     message: `CSS declaration \`${declaration.prop}: ${declaration.value}\` runs on the browser clock and cannot be seeked deterministically across render workers.`,
     fixHint:
       "Keep the class or attribute swap for state; put the visual change on the paused GSAP timeline.",

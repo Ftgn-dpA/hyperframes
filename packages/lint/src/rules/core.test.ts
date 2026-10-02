@@ -832,18 +832,18 @@ describe("core rules", () => {
       ["transition", "opacity 0s linear 1s"],
       ["transition-duration", "0s, .2s"],
       ["transition-duration", "var(--speed)"],
-    ])("errors for %s declarations in style blocks", async (property, value) => {
+    ])("warns for %s declarations in style blocks", async (property, value) => {
       const result = await lintHyperframeHtml(
         compositionWithBodyPrefix(`<style>.card { ${property}: ${value}; }</style>`),
       );
       const finding = result.findings.find((item) => item.code === "css_transition_used");
 
-      expect(finding).toMatchObject({ severity: "error", selector: ".card" });
+      expect(finding).toMatchObject({ severity: "warning", selector: ".card" });
       expect(finding?.message).toContain(property);
       expect(finding?.fixHint).toContain("paused GSAP timeline");
     });
 
-    it("errors for an inline transition and identifies its element", async () => {
+    it("warns for an inline transition and identifies its element", async () => {
       const result = await lintHyperframeHtml(
         compositionWithBodyPrefix(
           "",
@@ -852,7 +852,7 @@ describe("core rules", () => {
       );
       const finding = result.findings.find((item) => item.code === "css_transition_used");
 
-      expect(finding).toMatchObject({ severity: "error", elementId: "card" });
+      expect(finding).toMatchObject({ severity: "warning", elementId: "card" });
       expect(finding?.snippet).toContain('id="card"');
     });
 
