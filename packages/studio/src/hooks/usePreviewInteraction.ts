@@ -101,10 +101,10 @@ export function usePreviewInteraction({
       const wasPlaying = usePlayerStore.getState().isPlaying;
       pausePreviewPlayback();
       // A click that resolves to nothing (dead-zone / deselect) shouldn't leave
-      // playback paused — pausing before sampling only exists to keep the hit
-      // target stable while resolving; resume if nothing was selected.
+      // playback paused; the pause only keeps the hit target stable while resolving.
+      // Resume through requestPlayback so adapter, rAF loop and flag move together.
       const resumeIfNothingSelected = () => {
-        if (wasPlaying) usePlayerStore.getState().setIsPlaying(true);
+        if (wasPlaying) usePlayerStore.getState().requestPlayback(true);
       };
 
       // Double-click a group → drill into it and select the child under the
@@ -260,9 +260,10 @@ export function usePreviewInteraction({
   }, [updateDomEditHoverSelection]);
 
   const handleBlockedDomMove = useCallback(
-    (selection: DomEditSelection) => {
+    (selection: DomEditSelection, reason?: string) => {
       showToast(
-        selection.capabilities.reasonIfDisabled ??
+        reason ??
+          selection.capabilities.reasonIfDisabled ??
           "This element can't be adjusted directly from the preview.",
         "info",
       );

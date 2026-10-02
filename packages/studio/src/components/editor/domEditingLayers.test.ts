@@ -6,6 +6,8 @@ import {
   buildDomEditPatchTarget,
   buildTextFieldChildLocator,
   readHfId,
+  liveLayerElement,
+  domEditSelectionToFacts,
 } from "./domEditingLayers";
 import type { DomEditTextField } from "./domEditingTypes";
 
@@ -255,5 +257,99 @@ describe("collectDomEditLayerItems item budget", () => {
 
   it("truncates only when a caller asks for a rendering budget", () => {
     expect(collectDomEditLayerItems(documentWith(200), opts, 80)).toHaveLength(80);
+  });
+});
+
+describe("collectDomEditLayerItems selector-index cost", () => {
+  // Attached, unlike the fixture above: a detached subtree is invisible to
+  // document.querySelectorAll, so the occurrence lookup would find nothing.
+  function attachedRootWithSharedClass(count: number): HTMLElement {
+    const root = document.createElement("div");
+    root.setAttribute("data-composition-id", "index.html");
+    for (let i = 0; i < count; i++) {
+      const child = document.createElement("div");
+      child.className = "box";
+      root.append(child);
+    }
+    document.body.append(root);
+    return root;
+  }
+
+  /** Class-selector document queries made by one walk over `count` sibling cards. */
+  function classSelectorQueries(count: number): number {
+    const root = attachedRootWithSharedClass(count);
+    const doc = root.ownerDocument;
+    const real = doc.querySelectorAll.bind(doc);
+    let calls = 0;
+    Object.defineProperty(doc, "querySelectorAll", {
+      configurable: true,
+      value: (selector: string) => {
+        if (selector.startsWith(".")) calls += 1;
+        return real(selector);
+      },
+    });
+    try {
+      expect(collectDomEditLayerItems(root, opts)).toHaveLength(count);
+      return calls;
+    } finally {
+      delete (doc as Partial<Document>).querySelectorAll;
+      root.remove();
+    }
+  }
+
+  // The occurrence index is resolved here, for every item, so an unshared index
+  // costs one whole-document query per element — quadratic once a composition
+  // repeats a card or tile class. Owning the pass here rather than at each call
+  // site is what keeps the layers panel, the marquee and the agent's look tool
+  // linear too; invariance across a 4x fixture fails for any per-element term.
+  it("resolves a shared selector once per walk, not once per element", () => {
+    expect(classSelectorQueries(48)).toBe(classSelectorQueries(12));
+    expect(classSelectorQueries(12)).toBe(1);
+  });
+});
+
+describe("liveLayerElement", () => {
+  it("finds a replaced layer again in its own file when a sub-composition repeats its id", () => {
+    document.body.innerHTML =
+      '<div data-composition-id="main">' +
+      '<div data-composition-id="strip" data-composition-src="compositions/strip.html">' +
+      '<div id="card-1">strip</div></div><div id="card-1">root</div></div>';
+    const stale = document.createElement("div");
+    const layer = {
+      key: "index.html:card-1:0",
+      element: stale,
+      label: "card-1",
+      tagName: "div",
+      depth: 0,
+      childCount: 0,
+      id: "card-1",
+      sourceFile: "index.html",
+    };
+
+    expect(liveLayerElement(layer, document, "index.html").textContent).toBe("root");
+    expect(
+      liveLayerElement({ ...layer, sourceFile: "compositions/strip.html" }, document, "index.html")
+        .textContent,
+    ).toBe("strip");
+  });
+});
+
+describe("domEditSelectionToFacts hasAudio", () => {
+  async function factsFor(html: string) {
+    document.body.innerHTML = html;
+    const node = document.body.firstElementChild;
+    if (!(node instanceof HTMLElement)) throw new Error("expected element");
+    const selection = await resolveDomEditSelection(node, opts);
+    document.body.innerHTML = "";
+    if (!selection) throw new Error("expected selection");
+    return domEditSelectionToFacts(selection);
+  }
+
+  it("is true for an unmuted video, false for muted or data-has-audio=false", async () => {
+    expect((await factsFor(`<video id="v1"></video>`)).hasAudio).toBe(true);
+    expect((await factsFor(`<video id="v2" data-has-audio="true"></video>`)).hasAudio).toBe(true);
+    expect((await factsFor(`<video id="v3" muted></video>`)).hasAudio).toBe(false);
+    expect((await factsFor(`<video id="v4" data-has-audio="false"></video>`)).hasAudio).toBe(false);
+    expect((await factsFor(`<div id="d1"></div>`)).hasAudio).toBe(false);
   });
 });

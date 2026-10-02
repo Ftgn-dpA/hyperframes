@@ -15,7 +15,8 @@ import { dirname, resolve } from "node:path";
 import { resolveDiagnosticNavigationTimeoutMs } from "../utils/renderArgs.js";
 import { resolveCompositionViewportFromHtml } from "../utils/compositionViewport.js";
 import {
-  assertWebGpuRequirement,
+  assertWebGpuAdapterAvailable,
+  compositionRequiresWebGpu,
   resolveCaptureBrowserGpuMode,
   resolveLocalBrowserGpuMode,
 } from "../browser/gpuPolicy.js";
@@ -73,7 +74,11 @@ export interface ShotOptions {
   entryFile?: string;
   /** Equal-time samples across the (windowed) timeline. Default 9. */
   samples?: number;
-  /** "path" = ghosts at real positions + path; "strip" = filmstrip by time. */
+  /** "path" = ghosts at real positions + path. "strip" = real per-time pixel
+   * filmstrip, but only when the selector targets an SVG element (see
+   * `stripTargetsSvg` below); for any other selector — including every
+   * nested sub-composition host, which is always a `<div data-composition-src>`
+   * — it falls back to one live frame plus vector position markers. */
   layout?: "path" | "strip";
   /** Zoom the motion to fill the frame. Default true. */
   fit?: boolean;
@@ -396,12 +401,12 @@ async function openCompositionPage(
   const size = resolveCompositionViewportFromHtml(html);
   const requestedGpuMode = resolveLocalBrowserGpuMode();
   const resolvedGpuMode = await resolveCaptureBrowserGpuMode(requestedGpuMode, executablePath);
-  assertWebGpuRequirement(html, requestedGpuMode, resolvedGpuMode);
+  const requiresWebGpu = compositionRequiresWebGpu(html);
   const browser = await puppeteer.default.launch({
     headless: true,
     executablePath,
     args: buildChromeArgs(
-      { ...size, captureMode: "screenshot" },
+      { ...size, captureMode: "screenshot", requiresWebGpu },
       { browserGpuMode: resolvedGpuMode },
     ),
   });
@@ -409,6 +414,7 @@ async function openCompositionPage(
   const navigationTimeout = resolveDiagnosticNavigationTimeoutMs();
   await page.setViewport(size);
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: navigationTimeout });
+  await assertWebGpuAdapterAvailable(page, requiresWebGpu);
   await page
     .waitForFunction(() => !!(window as unknown as { __timelines?: unknown }).__timelines, {
       timeout: 10000,
