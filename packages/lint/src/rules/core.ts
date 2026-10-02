@@ -258,20 +258,27 @@ function ruleForcesOpacityZero(rule: postcss.Rule): boolean {
 }
 
 const CSS_TRANSITION_PROPERTY_PATTERN = /^(?:-webkit-)?transition(?:-[a-z][a-z-]*)?$/i;
+const TRANSITION_NONE_PROPERTIES = new Set(["transition", "transition-property"]);
+const TRANSITION_TIME_PROPERTIES = new Set([
+  "transition",
+  "transition-duration",
+  "transition-delay",
+]);
+
+// All-zero times (the reduced-motion / render-lock reset) never run on the browser clock.
+function hasNonZeroTime(value: string): boolean {
+  const times = value.match(/[+-]?(?:\d*\.)?\d+m?s\b/g) ?? [];
+  return value.includes("var(") || times.some((time) => Number.parseFloat(time) !== 0);
+}
 
 function isSeekUnsafeTransition(declaration: postcss.Declaration): boolean {
   const property = declaration.prop.trim().toLowerCase();
-  if (property.startsWith("--") || !CSS_TRANSITION_PROPERTY_PATTERN.test(property)) return false;
+  if (!CSS_TRANSITION_PROPERTY_PATTERN.test(property)) return false;
 
   const name = property.replace(/^-webkit-/, "");
   const value = declaration.value.trim().toLowerCase();
-  if ((name === "transition" || name === "transition-property") && value === "none") return false;
-  if (name !== "transition" && name !== "transition-duration" && name !== "transition-delay") {
-    return true;
-  }
-  // All-zero times (the reduced-motion / render-lock reset) never run on the browser clock.
-  const times = value.match(/[+-]?(?:\d*\.)?\d+m?s\b/g) ?? [];
-  return value.includes("var(") || times.some((time) => Number.parseFloat(time) !== 0);
+  if (value === "none" && TRANSITION_NONE_PROPERTIES.has(name)) return false;
+  return !TRANSITION_TIME_PROPERTIES.has(name) || hasNonZeroTime(value);
 }
 
 function cssTransitionFinding(
